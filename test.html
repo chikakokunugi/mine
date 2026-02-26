@@ -6,36 +6,43 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 <style>
 body, html { margin: 0; padding: 0; background: #000; overflow: hidden; width: 100%; height: 100%; }
+
 .accordion-wrapper {
   display: flex;
   width: 100%;
   height: 100vh;
-  background: #000;
-  overflow: hidden;
 }
-.accordion-item {
+
+/* パネルの幅は永久に変わらない */
+.panel {
   position: relative;
   flex-shrink: 0;
-  width: 15%;
   height: 100%;
   overflow: hidden;
   border-right: 1px solid rgba(255,255,255,0.2);
   box-sizing: border-box;
 }
-.accordion-item:first-child {
-  width: 40%;
-}
-.bg-image {
+.panel:first-child { width: 40%; }
+.panel:not(:first-child) { width: 15%; }
+
+/* パネル内の画像コンテナ。2枚の画像を横に並べる */
+.img-track {
   position: absolute;
-  top: 0;
-  left: 50%;
+  top: 0; left: 0;
   height: 100%;
-  width: auto;
-  min-width: 110%;
-  object-fit: cover;
-  transform: translateX(-50%);
+  display: flex;
+  /* 幅はJS でセット（パネル幅×2） */
 }
-.vertical-title {
+
+.img-slide {
+  flex-shrink: 0;
+  height: 100%;
+  /* 幅はJS でセット（パネル幅と同じ） */
+  background-size: cover;
+  background-position: 50% 50%;
+}
+
+.panel-label {
   position: absolute;
   bottom: 50px;
   left: 50%;
@@ -52,39 +59,73 @@ body, html { margin: 0; padding: 0; background: #000; overflow: hidden; width: 1
 </head>
 <body>
 
-<div class="accordion-wrapper" id="slider">
-  <div class="accordion-item">
-    <img class="bg-image" src="image1.webp">
-    <h2 class="vertical-title">JAPAN</h2>
+<div class="accordion-wrapper" id="wrapper">
+  <div class="panel">
+    <div class="img-track"></div>
+    <span class="panel-label">JAPAN</span>
   </div>
-  <div class="accordion-item">
-    <img class="bg-image" src="image2.webp">
-    <h2 class="vertical-title">ASIA</h2>
+  <div class="panel">
+    <div class="img-track"></div>
+    <span class="panel-label">ASIA</span>
   </div>
-  <div class="accordion-item">
-    <img class="bg-image" src="image1.webp">
-    <h2 class="vertical-title">EUROPE</h2>
+  <div class="panel">
+    <div class="img-track"></div>
+    <span class="panel-label">EUROPE</span>
   </div>
-  <div class="accordion-item">
-    <img class="bg-image" src="image2.webp">
-    <h2 class="vertical-title">AMERICA</h2>
+  <div class="panel">
+    <div class="img-track"></div>
+    <span class="panel-label">AMERICA</span>
   </div>
-  <div class="accordion-item">
-    <img class="bg-image" src="image1.webp">
-    <h2 class="vertical-title">AFRICA</h2>
+  <div class="panel">
+    <div class="img-track"></div>
+    <span class="panel-label">AFRICA</span>
   </div>
 </div>
 
 <script>
-const slider = document.getElementById('slider');
+// 各パネルに表示する画像のキュー（順番に表示される）
+const IMAGE_QUEUE = [
+  'image1.webp',
+  'image2.webp',
+  'image1.webp',
+  'image2.webp',
+  'image1.webp',
+  'image2.webp',
+  'image1.webp',
+];
 
-// 全画像を中央にリセット
-function resetAllImgs() {
-  slider.querySelectorAll('.bg-image').forEach(img => {
-    gsap.set(img, { xPercent: -50 });
-  });
+const DURATION = 1.2;
+const INTERVAL = 2500;
+const EASE = 'power4.inOut';
+
+const panels = Array.from(document.querySelectorAll('.panel'));
+
+// 各パネルの状態管理
+const state = panels.map((panel, i) => ({
+  panel,
+  track: panel.querySelector('.img-track'),
+  // 各パネルは IMAGE_QUEUE の異なるオフセットから始める
+  queueIndex: i % IMAGE_QUEUE.length,
+}));
+
+// 各パネルを初期化：img-trackに現在画像をセット
+function initPanel(s) {
+  const panelW = s.panel.offsetWidth;
+  const track = s.track;
+
+  // trackに img-slide を1枚セット（現在の画像）
+  track.innerHTML = '';
+  track.style.width = panelW + 'px';
+  gsap.set(track, { x: 0 });
+
+  const slide = document.createElement('div');
+  slide.className = 'img-slide';
+  slide.style.width = panelW + 'px';
+  slide.style.backgroundImage = `url('${IMAGE_QUEUE[s.queueIndex]}')`;
+  track.appendChild(slide);
 }
-resetAllImgs();
+
+state.forEach(initPanel);
 
 let isAnimating = false;
 
@@ -92,42 +133,41 @@ function moveNext() {
   if (isAnimating) return;
   isAnimating = true;
 
-  const items  = Array.from(slider.querySelectorAll('.accordion-item'));
-  const first  = items[0];
-  const second = items[1];
-
+  // 全パネルで同時にスライドアニメーション
   const tl = gsap.timeline({
     onComplete: () => {
-      slider.appendChild(first);
-      gsap.set(slider, { x: 0 });
-      resetAllImgs();
+      // 全パネルのtrackをリセット（次の画像を現在画像として設定）
+      state.forEach(s => {
+        s.queueIndex = (s.queueIndex + 1) % IMAGE_QUEUE.length;
+        initPanel(s);
+      });
       isAnimating = false;
     }
   });
 
-  // slider全体を左へ
-  tl.to(slider, {
-    x: '-15%',
-    duration: 1.2,
-    ease: 'power4.inOut'
-  }, 0);
+  state.forEach(s => {
+    const panelW = s.panel.offsetWidth;
+    const track = s.track;
 
-  // パネル幅変更
-  tl.to(first,  { width: '15%', duration: 1.2, ease: 'power4.inOut' }, 0);
-  tl.to(second, { width: '40%', duration: 1.2, ease: 'power4.inOut' }, 0);
+    // 次の画像スライドを右端に追加
+    const nextSlide = document.createElement('div');
+    nextSlide.className = 'img-slide';
+    nextSlide.style.width = panelW + 'px';
+    const nextIndex = (s.queueIndex + 1) % IMAGE_QUEUE.length;
+    nextSlide.style.backgroundImage = `url('${IMAGE_QUEUE[nextIndex]}')`;
+    track.appendChild(nextSlide);
+    track.style.width = (panelW * 2) + 'px';
 
-  // 全パネルの画像を左へパン（毎回 -50% スタートで累積しない）
-  items.forEach(item => {
-    const img = item.querySelector('.bg-image');
-    tl.fromTo(img,
-      { xPercent: -50 },
-      { xPercent: -65, duration: 1.2, ease: 'power4.inOut' },
-      0
-    );
+    // trackを左へスライド（現在画像が左へ消え、次の画像が右から入る）
+    tl.to(track, {
+      x: -panelW,
+      duration: DURATION,
+      ease: EASE
+    }, 0);
   });
 }
 
-setInterval(moveNext, 2000);
+setInterval(moveNext, INTERVAL);
 </script>
 </body>
 </html>
