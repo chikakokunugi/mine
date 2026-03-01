@@ -11,37 +11,50 @@ body, html { margin: 0; padding: 0; background: #000; overflow: hidden; width: 1
   display: flex;
   width: 100%;
   height: 100vh;
+  overflow: hidden;
 }
 
-/* パネルの幅は永久に変わらない */
 .panel {
   position: relative;
   flex-shrink: 0;
   height: 100%;
   overflow: hidden;
-  border-right: 1px solid rgba(255,255,255,0.2);
   box-sizing: border-box;
 }
-.panel:first-child { width: 40%; }
-.panel:not(:first-child) { width: 15%; }
 
-/* パネル内の画像コンテナ。2枚の画像を横に並べる */
+/* 2枚目以降は左のパネルの下に潜り込む */
+.panel:nth-child(n+2) {
+  margin-left: -3%;
+}
+
+/* 1〜4番目だけ右角丸 */
+.panel:nth-child(1),
+.panel:nth-child(2),
+.panel:nth-child(3),
+.panel:nth-child(4) {
+  border-radius: 0 50px 50px 0;
+}
+
+/* 左が上に来るようにz-index */
+.panel:nth-child(1) { width: 43%; z-index: 5; }
+.panel:nth-child(2) { width: 18%; z-index: 4; }
+.panel:nth-child(3) { width: 18%; z-index: 3; }
+.panel:nth-child(4) { width: 18%; z-index: 2; }
+.panel:nth-child(5) { width: 18%; z-index: 1; }
+/* 合計: 42 + 17*4 - 2*4 = 42 + 68 - 8 = 102% → overflowで右端切れる → ちょうどいい */
+
 .img-track {
   position: absolute;
   top: 0; left: 0;
   height: 100%;
   display: flex;
-  /* 幅はJS でセット（パネル幅×2） */
 }
-
 .img-slide {
   flex-shrink: 0;
   height: 100%;
-  /* 幅はJS でセット（パネル幅と同じ） */
   background-size: cover;
   background-position: 50% 50%;
 }
-
 .panel-label {
   position: absolute;
   bottom: 50px;
@@ -83,7 +96,6 @@ body, html { margin: 0; padding: 0; background: #000; overflow: hidden; width: 1
 </div>
 
 <script>
-// 各パネルに表示する画像のキュー（順番に表示される）
 const IMAGE_QUEUE = [
   'image1.webp',
   'image2.webp',
@@ -100,24 +112,18 @@ const EASE = 'power4.inOut';
 
 const panels = Array.from(document.querySelectorAll('.panel'));
 
-// 各パネルの状態管理
 const state = panels.map((panel, i) => ({
   panel,
   track: panel.querySelector('.img-track'),
-  // 各パネルは IMAGE_QUEUE の異なるオフセットから始める
   queueIndex: i % IMAGE_QUEUE.length,
 }));
 
-// 各パネルを初期化：img-trackに現在画像をセット
 function initPanel(s) {
   const panelW = s.panel.offsetWidth;
   const track = s.track;
-
-  // trackに img-slide を1枚セット（現在の画像）
   track.innerHTML = '';
   track.style.width = panelW + 'px';
   gsap.set(track, { x: 0 });
-
   const slide = document.createElement('div');
   slide.className = 'img-slide';
   slide.style.width = panelW + 'px';
@@ -133,10 +139,8 @@ function moveNext() {
   if (isAnimating) return;
   isAnimating = true;
 
-  // 全パネルで同時にスライドアニメーション
   const tl = gsap.timeline({
     onComplete: () => {
-      // 全パネルのtrackをリセット（次の画像を現在画像として設定）
       state.forEach(s => {
         s.queueIndex = (s.queueIndex + 1) % IMAGE_QUEUE.length;
         initPanel(s);
@@ -148,8 +152,6 @@ function moveNext() {
   state.forEach(s => {
     const panelW = s.panel.offsetWidth;
     const track = s.track;
-
-    // 次の画像スライドを右端に追加
     const nextSlide = document.createElement('div');
     nextSlide.className = 'img-slide';
     nextSlide.style.width = panelW + 'px';
@@ -157,8 +159,6 @@ function moveNext() {
     nextSlide.style.backgroundImage = `url('${IMAGE_QUEUE[nextIndex]}')`;
     track.appendChild(nextSlide);
     track.style.width = (panelW * 2) + 'px';
-
-    // trackを左へスライド（現在画像が左へ消え、次の画像が右から入る）
     tl.to(track, {
       x: -panelW,
       duration: DURATION,
